@@ -2625,7 +2625,14 @@ export async function sendDraftEnvelope(
     throw error;
   }
 
-  if (input.deliveryMode === "outtec") return sendEnvelopeResponseSchema.parse({ envelopeId, expiresAt, notifiedSignerName: firstSigner.name, redirectPath: `/envelopes/${envelopeId}`, sentAt });
+  if (input.deliveryMode === "outtec")
+    return sendEnvelopeResponseSchema.parse({
+      envelopeId,
+      expiresAt,
+      notifiedSignerName: firstSigner.name,
+      redirectPath: `/envelopes/${envelopeId}`,
+      sentAt,
+    });
   let invitationMessageId: string | undefined;
 
   try {

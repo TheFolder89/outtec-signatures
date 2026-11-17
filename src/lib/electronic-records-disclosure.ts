@@ -5,7 +5,9 @@
 // the version whenever the words change.
 
 const outtecBridge = process.env.OUTTEC_BRIDGE_MODE === "true";
-export const ELECTRONIC_RECORDS_DISCLOSURE_VERSION = outtecBridge ? "outtec-20261116-v1" : "2026-11-13";
+export const ELECTRONIC_RECORDS_DISCLOSURE_VERSION = outtecBridge
+  ? "outtec-20261116-v1"
+  : "2026-11-13";
 
 export type DisclosureParty = {
   /** Who to ask for a paper copy or to withdraw: the organization or sender. */
@@ -18,12 +20,25 @@ export type DisclosureSection = { heading: string; text: string };
 export function buildElectronicRecordsDisclosure(
   party: DisclosureParty,
 ): DisclosureSection[] {
-  if (outtecBridge) return [
-    { heading: "Conferência do documento", text: "Confira o PDF, a identidade utilizada e a finalidade de sua assinatura. A manifestação será vinculada a esta versão exata do documento." },
-    { heading: "Assinatura eletrônica com evidências", text: "Sua confirmação registra uma manifestação eletrônica e evidências de autoria e integridade. Este método não representa assinatura qualificada ICP-Brasil individual." },
-    { heading: "Decisão e cópia", text: "Você pode voltar sem assinar e solicitar esclarecimentos ao responsável. Depois de assinar, guarde a cópia do documento e seu relatório de evidências pela central de assinaturas." },
-    { heading: "Retenção e acesso", text: "A preservação e o acesso às cópias seguem a finalidade do documento, as permissões vigentes e as obrigações aplicáveis. A assinatura não substitui aprovação técnica, pagamento ou autorização operacional." },
-  ];
+  if (outtecBridge)
+    return [
+      {
+        heading: "Conferência do documento",
+        text: "Confira o PDF, a identidade utilizada e a finalidade de sua assinatura. A manifestação será vinculada a esta versão exata do documento.",
+      },
+      {
+        heading: "Assinatura eletrônica com evidências",
+        text: "Sua confirmação registra uma manifestação eletrônica e evidências de autoria e integridade. Este método não representa assinatura qualificada ICP-Brasil individual.",
+      },
+      {
+        heading: "Decisão e cópia",
+        text: "Você pode voltar sem assinar e solicitar esclarecimentos ao responsável. Depois de assinar, guarde a cópia do documento e seu relatório de evidências pela central de assinaturas.",
+      },
+      {
+        heading: "Retenção e acesso",
+        text: "A preservação e o acesso às cópias seguem a finalidade do documento, as permissões vigentes e as obrigações aplicáveis. A assinatura não substitui aprovação técnica, pagamento ou autorização operacional.",
+      },
+    ];
   const contact = party.contactAddress
     ? `${party.senderName} at ${party.contactAddress}`
     : party.senderName;
@@ -52,5 +67,6 @@ export function buildElectronicRecordsDisclosure(
   ];
 }
 
-export const CONSENT_STATEMENT =
-  outtecBridge ? "Li o documento e as informações acima, conferi minha identidade e concordo em registrar minha assinatura eletrônica nesta versão e finalidade." : "I have read the disclosure above, I can open and save PDF files on this device, and I agree to use electronic records and signatures for this document.";
+export const CONSENT_STATEMENT = outtecBridge
+  ? "Li o documento e as informações acima, conferi minha identidade e concordo em registrar minha assinatura eletrônica nesta versão e finalidade."
+  : "I have read the disclosure above, I can open and save PDF files on this device, and I agree to use electronic records and signatures for this document.";

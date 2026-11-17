@@ -2628,7 +2628,15 @@ export async function submitSigningForToken(
         );
       }
 
-      if (deliveryMode === "outtec") return signingSubmitResponseSchema.parse({ envelopeId: context.envelope.id, redirectPath: getSigningDoneRedirectPath(token, context.envelope.title), submittedAt });
+      if (deliveryMode === "outtec")
+        return signingSubmitResponseSchema.parse({
+          envelopeId: context.envelope.id,
+          redirectPath: getSigningDoneRedirectPath(
+            token,
+            context.envelope.title,
+          ),
+          submittedAt,
+        });
       try {
         const delivery = await emailService.send(
           buildSigningInvitationEmail({
@@ -2903,7 +2911,12 @@ export async function submitSigningForToken(
       throw error;
     }
 
-    if (deliveryMode === "outtec") return signingSubmitResponseSchema.parse({ envelopeId: context.envelope.id, redirectPath: getSigningDoneRedirectPath(token, context.envelope.title), submittedAt });
+    if (deliveryMode === "outtec")
+      return signingSubmitResponseSchema.parse({
+        envelopeId: context.envelope.id,
+        redirectPath: getSigningDoneRedirectPath(token, context.envelope.title),
+        submittedAt,
+      });
     try {
       await sendCompletionEmails({
         attachments: {
@@ -3261,7 +3274,12 @@ export async function declineSigningForToken(
     throw error;
   }
 
-  if (deliveryMode === "outtec") return signingDeclineResponseSchema.parse({ declinedAt, envelopeId: context.envelope.id, state: "declined" });
+  if (deliveryMode === "outtec")
+    return signingDeclineResponseSchema.parse({
+      declinedAt,
+      envelopeId: context.envelope.id,
+      state: "declined",
+    });
   try {
     const delivery = await emailService.send(
       buildDeclineNotificationEmail({

@@ -25,7 +25,11 @@ export function resolveStorageDriver(
 ): StorageDriver {
   const configuredDriver = env.STORAGE_DRIVER?.trim().toLowerCase();
 
-  if (configuredDriver === "blob" || configuredDriver === "local" || configuredDriver === "r2") {
+  if (
+    configuredDriver === "blob" ||
+    configuredDriver === "local" ||
+    configuredDriver === "r2"
+  ) {
     return configuredDriver;
   }
 
