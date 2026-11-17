@@ -3,7 +3,7 @@ import { type EnvSource } from "../../utils/env.ts";
 // Which storage the app uses. Kept free of the drivers themselves so the
 // request proxy can ask without loading them.
 
-export type StorageDriver = "blob" | "local";
+export type StorageDriver = "blob" | "local" | "r2";
 
 /** True when a Vercel Blob store is connected to the project. */
 export function hasBlobCredentials(env: EnvSource = process.env): boolean {
@@ -25,7 +25,7 @@ export function resolveStorageDriver(
 ): StorageDriver {
   const configuredDriver = env.STORAGE_DRIVER?.trim().toLowerCase();
 
-  if (configuredDriver === "blob" || configuredDriver === "local") {
+  if (configuredDriver === "blob" || configuredDriver === "local" || configuredDriver === "r2") {
     return configuredDriver;
   }
 

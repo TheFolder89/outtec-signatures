@@ -253,6 +253,7 @@ export type ProviderSignatureCompletion = {
 };
 
 type SubmitSigningOptions = {
+  deliveryMode?: "outtec";
   database?: DbPool;
   emailService?: EmailService;
   /** Set when a signing provider signed: see provider-signing.ts. */
@@ -2305,6 +2306,7 @@ export async function submitSigningForToken(
   token: string,
   input: unknown,
   {
+    deliveryMode,
     database = getDb(),
     emailService: givenEmailService,
     providerSignature,
@@ -2626,6 +2628,7 @@ export async function submitSigningForToken(
         );
       }
 
+      if (deliveryMode === "outtec") return signingSubmitResponseSchema.parse({ envelopeId: context.envelope.id, redirectPath: getSigningDoneRedirectPath(token, context.envelope.title), submittedAt });
       try {
         const delivery = await emailService.send(
           buildSigningInvitationEmail({
@@ -2900,6 +2903,7 @@ export async function submitSigningForToken(
       throw error;
     }
 
+    if (deliveryMode === "outtec") return signingSubmitResponseSchema.parse({ envelopeId: context.envelope.id, redirectPath: getSigningDoneRedirectPath(token, context.envelope.title), submittedAt });
     try {
       await sendCompletionEmails({
         attachments: {
