@@ -2,6 +2,7 @@ import { type EnvSource } from "../utils/env.ts";
 import { createBlobStorageService } from "./storage/blob.ts";
 import { resolveStorageDriver } from "./storage/driver.ts";
 import { createLocalStorageService } from "./storage/local.ts";
+import { createR2StorageService } from "./storage/r2.ts";
 import { type StorageService } from "./storage/types.ts";
 
 export {
@@ -44,6 +45,8 @@ export function createStorageService({
   env = process.env,
 }: CreateStorageServiceOptions = {}): StorageService {
   switch (resolveStorageDriver(env)) {
+    case "r2":
+      return createR2StorageService({ env });
     case "blob":
       return createBlobStorageService({ env });
     case "local":

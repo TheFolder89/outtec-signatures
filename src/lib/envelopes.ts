@@ -140,6 +140,8 @@ type CreateDraftEnvelopeInput = {
 };
 
 type SendDraftEnvelopeInput = {
+  /** Internal integration: invitation delivery and access remain with Outtec. */
+  deliveryMode?: "outtec";
   /** How many days signers get. The default applies when left out. */
   expiresInDays?: number;
   /** Days between automatic reminders. Null or left out means none. */
@@ -2623,6 +2625,14 @@ export async function sendDraftEnvelope(
     throw error;
   }
 
+  if (input.deliveryMode === "outtec")
+    return sendEnvelopeResponseSchema.parse({
+      envelopeId,
+      expiresAt,
+      notifiedSignerName: firstSigner.name,
+      redirectPath: `/envelopes/${envelopeId}`,
+      sentAt,
+    });
   let invitationMessageId: string | undefined;
 
   try {
