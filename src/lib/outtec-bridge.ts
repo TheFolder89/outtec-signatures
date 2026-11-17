@@ -1,14 +1,15 @@
-import { createHmac } from "node:crypto";
+import { createHmac, randomInt, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { getDb, type DbExecutor } from "./db/connection.ts";
 import { createDraftEnvelope, getPrepareEnvelopeDataForUser, replaceDraftEnvelopeSigners, replaceDraftEnvelopeFields, sendDraftEnvelope, voidSentEnvelope } from "./envelopes.ts";
-import { getSigningPayloadForToken, recordSignerConsent, submitSigningForToken, sendSignerEmailCode, verifySignerCheck } from "./signing.ts";
+import { getSigningPayloadForToken, recordSignerConsent, submitSigningForToken, declineSigningForToken } from "./signing.ts";
+import { createEmailService } from "./services/email.ts";
 import { createStorageService } from "./services/storage.ts";
 import { hashOpaqueToken } from "./services/opaque-tokens.ts";
 import { verifyAuditChain } from "./services/audit.ts";
 import { bridgeDigest } from "./outtec-protocol.ts";
 
-export const outtecCommandSchema = z.object({ requestId: z.uuid(), operationId: z.uuid(), action: z.enum(["create", "fields", "send", "cancel", "status", "signing", "submit", "artifact", "send-code", "verify-code"]), payload: z.record(z.string(), z.unknown()) });
+export const outtecCommandSchema = z.object({ requestId: z.uuid(), operationId: z.uuid(), action: z.enum(["create", "fields", "send", "cancel", "decline", "status", "operation-status", "signing", "submit", "artifact", "send-code", "verify-code"]), payload: z.record(z.string(), z.unknown()) });
 type BridgeCommand = z.infer<typeof outtecCommandSchema>;
 type Binding = { owner_id: string; envelope_id: string | null; source_hash: string; signature_method: string };
 const sender = { senderEmail: "signatures@outtec.invalid", senderName: "outTEC" };
@@ -64,9 +65,34 @@ async function signingToken(command: BridgeCommand): Promise<string> {
   return token;
 }
 
+async function guestEmailCheck(command: BridgeCommand) {
+  const email = z.email().parse(command.payload.actorEmail).toLowerCase();
+  const record = await binding(command.requestId), database = getDb();
+  const signer = (await database.query("SELECT s.id,e.status,e.expires_at FROM signers s JOIN envelopes e ON e.id=s.envelope_id WHERE s.envelope_id=$1 AND lower(s.email)=$2", [record.envelope_id, email])).rows[0];
+  if (!signer || !["sent", "completed"].includes(signer.status) || signer.status === "sent" && signer.expires_at <= Date.now() / 1000) throw Object.assign(new Error("Guest verification is unavailable."), { statusCode: 409 });
+  const digest = (code: string) => createHmac("sha256", process.env.OUTTEC_BRIDGE_SECRET!).update(`guest-code-v1\n${command.requestId}\n${email}\n${code}`).digest("hex");
+  if (command.action === "send-code") {
+    const code = randomInt(0, 1000000).toString().padStart(6, "0");
+    const stored = await database.query("INSERT INTO outtec_bridge_guest_codes(request_id,email,code_hash,expires_at) VALUES($1,$2,$3,now()+interval '10 minutes') ON CONFLICT(request_id,email) DO UPDATE SET code_hash=$3,expires_at=now()+interval '10 minutes',attempts=0,last_sent_at=now() WHERE outtec_bridge_guest_codes.last_sent_at < now()-interval '60 seconds' RETURNING request_id", [command.requestId, email, digest(code)]);
+    if (stored.rowCount) await createEmailService().send({ to: email, subject: "Seu código para conferir o documento — outTEC", template: "signing_code", textBody: `Seu código de confirmação é ${code}. Ele vale por dez minutos e só pode ser utilizado uma vez. Não compartilhe este código.`, htmlBody: `<p>Seu código de confirmação é <strong>${code}</strong>.</p><p>Ele vale por dez minutos e só pode ser utilizado uma vez. Não compartilhe este código.</p>` });
+    return { accepted: true };
+  }
+  const code = z.string().regex(/^\d{6}$/).parse(command.payload.code);
+  const attempt = (await database.query("UPDATE outtec_bridge_guest_codes SET attempts=attempts+1 WHERE request_id=$1 AND email=$2 AND expires_at>now() AND code_hash IS NOT NULL AND attempts<5 RETURNING code_hash", [command.requestId, email])).rows[0];
+  if (!attempt || !timingSafeEqual(Buffer.from(attempt.code_hash, "hex"), Buffer.from(digest(code), "hex"))) throw Object.assign(new Error("Invalid or expired email code."), { statusCode: 400 });
+  const consumed = await database.query("UPDATE outtec_bridge_guest_codes SET code_hash=NULL WHERE request_id=$1 AND email=$2 AND code_hash=$3 RETURNING request_id", [command.requestId, email, attempt.code_hash]);
+  if (consumed.rowCount !== 1) throw Object.assign(new Error("Email code already consumed."), { statusCode: 400 });
+  return { confirmed: true };
+}
+
 async function execute(command: BridgeCommand) {
   if (command.action === "create") return create(command);
   const record = await binding(command.requestId);
+  if (command.action === "operation-status") {
+    const targetId = z.uuid().parse(command.payload.targetOperationId);
+    const operation = (await getDb().query("SELECT result FROM outtec_bridge_operations WHERE id=$1 AND request_id=$2", [targetId, command.requestId])).rows[0];
+    return { confirmed: Boolean(operation?.result), ...(operation?.result ? { state: await state(command.requestId) } : {}) };
+  }
   if (command.action === "status") return state(command.requestId);
   if (command.action === "artifact") {
     const kind = z.enum(["signed", "certificate"]).parse(command.payload.kind);
@@ -92,11 +118,12 @@ async function execute(command: BridgeCommand) {
     const token = await signingToken(command), payload = await getSigningPayloadForToken(token, { verifiedMethods: command.payload.guestVerified === true ? ["email_code"] : [] });
     return { currentSignerFields: payload.currentSignerFields, visibleFields: payload.visibleFields, disclosure: payload.disclosure, pageCount: payload.pageCount, pages: payload.pages, signerName: payload.currentSignerFields[0]?.signerName ?? "" };
   } else if (command.action === "send-code") {
-    await sendSignerEmailCode(await signingToken(command));
-    return { accepted: true };
+    return guestEmailCheck(command);
   } else if (command.action === "verify-code") {
-    await verifySignerCheck(await signingToken(command), { method: "email_code", code: z.string().regex(/^\d{6}$/).parse(command.payload.code) });
-    return { confirmed: true };
+    return guestEmailCheck(command);
+  } else if (command.action === "decline") {
+    const current = await state(command.requestId), email = z.email().parse(command.payload.actorEmail);
+    if (current.signers.find(p => p.email === email)?.status !== "declined") await declineSigningForToken(await signingToken(command), { reason: z.string().trim().min(5).max(500).parse(command.payload.reason) }, { deliveryMode: "outtec", verifiedMethods: command.payload.guestVerified === true ? ["email_code"] : [] });
   } else if (command.action === "submit") {
     const actorEmail = z.email().parse(command.payload.actorEmail);
     const current = await state(command.requestId);
@@ -116,7 +143,7 @@ export async function executeOuttecCommand(input: unknown) {
   const lock = await database.connect();
   try {
     await lock.query("SELECT pg_advisory_lock(hashtextextended($1,82711))", [command.requestId]);
-    if (["status", "signing", "artifact"].includes(command.action)) return await execute(command);
+    if (["status", "operation-status", "signing", "artifact"].includes(command.action)) return await execute(command);
     const inputHash = bridgeDigest(JSON.stringify(command));
     const existing = (await lock.query("SELECT request_id,input_hash,result FROM outtec_bridge_operations WHERE id=$1", [command.operationId])).rows[0];
     if (existing && (existing.request_id !== command.requestId || existing.input_hash !== inputHash)) throw Object.assign(new Error("Operation identity conflict."), { statusCode: 409 });

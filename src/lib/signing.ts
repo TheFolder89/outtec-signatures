@@ -3019,6 +3019,7 @@ export async function declineSigningForToken(
   token: string,
   input: unknown,
   {
+    deliveryMode,
     database = getDb(),
     requestMeta = {},
     verifiedMethods = [],
@@ -3260,6 +3261,7 @@ export async function declineSigningForToken(
     throw error;
   }
 
+  if (deliveryMode === "outtec") return signingDeclineResponseSchema.parse({ declinedAt, envelopeId: context.envelope.id, state: "declined" });
   try {
     const delivery = await emailService.send(
       buildDeclineNotificationEmail({

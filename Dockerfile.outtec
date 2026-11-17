@@ -1,16 +1,16 @@
 FROM node:24-bookworm-slim
 WORKDIR /app
 ENV NODE_ENV=production
-COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
+COPY outtec-runtime/package.json outtec-runtime/package-lock.json ./
+RUN npm ci --omit=dev && npm cache clean --force
 COPY src ./src
 COPY scripts/outtec-server.ts ./scripts/outtec-server.ts
 COPY db ./db
-COPY src/assets ./src/assets
 COPY LICENSE THIRD_PARTY_NOTICES.md ./
 COPY LICENSES ./LICENSES
 ARG OUTTEC_RELEASE_SHA
 ENV OUTTEC_RELEASE_SHA=${OUTTEC_RELEASE_SHA}
 LABEL org.opencontainers.image.source="https://github.com/TheFolder89/outtec-signatures"
 LABEL org.opencontainers.image.revision=${OUTTEC_RELEASE_SHA}
+USER node
 CMD ["node", "--disable-warning=MODULE_TYPELESS_PACKAGE_JSON", "scripts/outtec-server.ts"]
